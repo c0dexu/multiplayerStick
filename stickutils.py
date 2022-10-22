@@ -24,7 +24,7 @@ class GameEntity(pygame.sprite.Sprite):
         self.angle = 0
         self.can_collide = True
 
-    def handle_collisions(self, entities: [], collision_tolerance = 0.3):
+    def handle_collisions(self, entities: [], collision_tolerance=0.3):
         filtered_entities = filter(lambda e: self.collision_region.colliderect(e.rect), entities)
         for entity in filtered_entities:
             if entity.can_collide and self.rect.colliderect(entity.rect):
@@ -51,17 +51,8 @@ class GameEntity(pygame.sprite.Sprite):
                     force = -collision_tolerance * dy
                     self.vy += force
 
-
-
-
-
-
     def update(self):
-        if not self.v_collision:
-            self.vy += self.gy
-        else:
-            self.vy = 0
-
+        self.vy += self.gx
         self.rect.x += self.vx
         self.rect.y += self.vy
         self.collision_region.x = self.rect.x
