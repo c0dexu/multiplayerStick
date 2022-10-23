@@ -31,7 +31,7 @@ class GameEntity(pygame.sprite.Sprite):
 
                 # horizontal collision
                 if self.rect.x + self.rect.width > entity.rect.x:
-                    dx = self.rect.x + self.rect.width - entity.rect.x
+                    dx = entity.rect.x - self.rect.x - self.rect.width
                     force = -collision_tolerance * dx
                     self.vx += force
 
@@ -46,8 +46,8 @@ class GameEntity(pygame.sprite.Sprite):
                     force = -collision_tolerance * dy
                     self.vy += force
 
-                if self.rect.y < entity.rect.y:
-                    dy = self.rect.y - entity.rect.y
+                if self.rect.y > entity.rect.y + entity.rect.height:
+                    dy = entity.rect.y + entity.rect.height - self.rect.y
                     force = -collision_tolerance * dy
                     self.vy += force
 
