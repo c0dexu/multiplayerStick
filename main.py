@@ -1,7 +1,13 @@
 import pygame.display
 
 import stickutils
+
 pygame.init()
+pygame.mixer.init()
+
+def call_me(*argv):
+    for arg in argv:
+        print(arg)
 
 def main():
     WIDTH = 1024
@@ -15,43 +21,31 @@ def main():
     player = stickutils.Player(WIDTH / 2, HEIGHT / 2, all_entities=entities)
     gui_sprites = pygame.sprite.Group()
     sprites.add(player)
+    ball = stickutils.Ball(0, 0, all_entities=entities)
+    entities.append(ball)
+    sprites.add(ball)
     clock = pygame.time.Clock()
     dt = 0
 
-    for i in range(5):
-        block = stickutils.Block(WIDTH / 2 + i * 32, HEIGHT / 2 + 128)
-        sprites.add(block)
-        entities.append(block)
-    block = stickutils.Block(WIDTH / 2 + 3 * 32, HEIGHT / 2 + 128 - 32)
-    sprites.add(block)
-    entities.append(block)
-
-    block = stickutils.Block(WIDTH / 2 + 3 * 32, HEIGHT / 2 + 128 - 64)
-    sprites.add(block)
-    entities.append(block)
-
-
-    block = stickutils.Block(WIDTH / 2 + 2 * 32, HEIGHT / 2 + 128 - 64 * 2)
-    sprites.add(block)
-    entities.append(block)
-
-
-    block = stickutils.Block(WIDTH / 2 + 1 * 32, HEIGHT / 2 + 128 - 64 * 2)
-    sprites.add(block)
-    entities.append(block)
-
     # frame = stickutils.Frame(gui_sprites, 32, 32, 128, 128, stickutils.Color(0, 255, 0))
-    nametag = stickutils.TextLabel(0, 0, player.name)
+    stickutils.generate_baseplate(0, 0, 1024, sprites, entities)
+
+    frame_test = stickutils.Frame(window, 0, 0, 128, 128, (0, 255, 0))
+    input_test = stickutils.TextInput(window, frame_test.width // 2, frame_test.height // 2, 128, 32, parent=frame_test)
+    input_test.return_callback = call_me
 
     while True:
-        # player.handle_collisions(sprites, dt, 0)
-        # player.handle_collisions(sprites, dt, 1)
+        events = pygame.event.get()
+        for event in events:
+            input_test.listen(event)
+
         sprites.update(pygame.event.get(), dt)
         window.fill((0, 0, 0))
         sprites.draw(window)
-        nametag.draw(window)
-        nametag.update(player.rect.center[0] - nametag.rect.width / 2, player.rect.center[1] - player.rect.height - nametag.rect.height)
+        frame_test.move_to_pixels(WIDTH / 4, 0)
+        frame_test.draw()
         gui_sprites.draw(window)
+        input_test.draw()
         pygame.display.update()
         dt = clock.tick(60)
 
