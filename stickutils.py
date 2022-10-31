@@ -7,6 +7,10 @@ def place_meeting(x, y, w, h, rect: pygame.Rect):
     return test_rect.colliderect(rect)
 
 
+def lerp(a, b, t):
+    return a + (b - a) * t
+
+
 ## GUI elements ##
 class Color:
     def __init__(self, r: int, g: int, b: int):
@@ -116,9 +120,45 @@ class TextInput(GuiElement):
         pygame.draw.rect(self.surface, col, pygame.rect.Rect(self.x + 3, self.y + 2, 2, self.rect.height - 2))
 
 
+class ImageBox(GuiElement):
+    def __init__(self, surface, x, y, width, height, color, image_path, parent=None):
+        super().__init__(surface, x, y, width, height, color, parent)
+        self.image_path = image_path
+        self.image = pygame.image.load(image_path)
+        self.rect = self.image.get_rect()
+
+    def draw(self):
+        self.surface.blit(self.image, (self.x, self.y))
+
+
+class ProgressBar(GuiElement):
+    def __init__(self, surface, x, y, width, height, inner_min_color, inner_max_color, outer_color, parent=None):
+        super().__init__(surface, x, y, width, height, outer_color, parent)
+        self.inner_min_color = inner_min_color
+        self.inner_max_color = inner_max_color
+        self.rect_inner = self.rect.copy()
+        self.percentage = 1
+        self.set_bar_percentage(1)
+
+    def draw(self):
+        final_color = (
+            lerp(self.inner_min_color[0], self.inner_max_color[0], self.percentage),
+            lerp(self.inner_min_color[1], self.inner_max_color[1], self.percentage),
+            lerp(self.inner_min_color[2], self.inner_max_color[2], self.percentage)
+        )
+        pygame.draw.rect(self.surface, self.color, self.rect)
+        pygame.draw.rect(self.surface, final_color, self.rect_inner)
+
+    def set_bar_percentage(self, percentage):
+        if percentage > 0:
+            self.rect_inner.width = self.rect.width * percentage
+            self.percentage = percentage
+
+
 class GameEntity(pygame.sprite.Sprite):
     def __init__(self, x, y, vx, vy, sprite_path, all_entities):
         pygame.sprite.Sprite.__init__(self)
+        self.damage_timer = 50
         self.id = uuid.uuid4()
         self.all_entities = all_entities
         self.vx = vx
@@ -139,6 +179,18 @@ class GameEntity(pygame.sprite.Sprite):
         self.dx = 0
         self.dy = 0
 
+    def fill(self, surface, color):
+        """Fill all pixels of the surface with color, preserve transparency."""
+        w, h = surface.get_size()
+        r, g, b, _ = color
+        for x in range(w):
+            for y in range(h):
+                a = surface.get_at((x, y))[3]
+                surface.set_at((x, y), pygame.Color(r, g, b, a))
+
+    def take_damage(self):
+        pass
+
     def handle_collisions(self, entities: [], dt, axis, collision_tolerance=0.3):
         filtered_entities = list(filter(lambda e: e != self and self.collision_region.colliderect(e.rect), entities))
         colliding_entities = []
@@ -146,17 +198,25 @@ class GameEntity(pygame.sprite.Sprite):
             if entity.can_collide and self.rect.colliderect(entity.rect):
                 colliding_entities.append(entity)
         for e in entities:
-            if e.rect.colliderect(self.rect.x + self.dx, self.rect.y, self.rect.width, self.rect.height):
-                self.dx = 0
-                # self.vx = 0
+            if e != self:
+                if e.rect.colliderect(self.rect.x + self.dx, self.rect.y, self.rect.width, self.rect.height):
+                    self.dx = 0
+                    # self.vx = 0
 
-            if e.rect.colliderect(self.rect.x, self.rect.y + self.dy, self.rect.width, self.rect.height):
-                if self.vy < 0:
-                    self.dy = e.rect.bottom - self.rect.top
-                    self.vy += self.dy
-                elif self.vy >= 0:
-                    self.dy = e.rect.top - self.rect.bottom
-                    self.vy = 0
+                if e.rect.colliderect(self.rect.x, self.rect.y + self.dy, self.rect.width, self.rect.height):
+                    if abs(self.vy) > 5:
+                        fallen = pygame.mixer.Sound("Sounds/fall_solid.mp3")
+                        pygame.mixer.Sound.play(fallen)
+                    if abs(self.vy) > 10:
+                        fallen = pygame.mixer.Sound("Sounds/fall_damage2.mp3")
+                        pygame.mixer.Sound.play(fallen)
+                        self.take_damage()
+                    if self.vy < 0:
+                        self.dy = e.rect.bottom - self.rect.top
+                        self.vy += self.dy
+                    elif self.vy >= 0:
+                        self.dy = e.rect.top - self.rect.bottom
+                        self.vy = 0
 
     def update(self, a, b):
         if self.has_gravity:
@@ -181,6 +241,7 @@ class Player(GameEntity):
         self.yspawn = self.rect.y
         self.name = "Player_" + str(uuid.uuid4()).split('-')[0]
         self.event_flag = False
+        self.damage_timer = 50
 
     def respawn(self):
         self.rect.x = self.xspawn
@@ -204,6 +265,7 @@ class Player(GameEntity):
 
             if key[pygame.K_SPACE] and not self.in_air:
                 self.vy -= self.jump_speed * 1
+            pygame.event.pump()
 
         if self.has_gravity:
             self.vy += self.gy * dt
@@ -245,6 +307,7 @@ class Ball(GameEntity):
                 # self.vx = 0
 
             if e.rect.colliderect(self.rect.x, self.rect.y + self.dy, self.rect.width, self.rect.height):
+
                 if self.vy < 0:
                     self.dy = e.rect.bottom - self.rect.top
                     self.vy -= self.dy
@@ -261,11 +324,62 @@ def generate_baseplate(x, y, w, sprites: pygame.sprite.Group, entities):
 
 
 class World:
-    def __init__(self, x, y, background, entities, sprites, w_width=1024, w_height=512):
+    def __init__(self, background, w_width=1024, w_height=512):
         self.window = pygame.display.set_mode((w_width, w_height))
         pygame.display.set_caption("Stick")
         self.entities = []
-        self.sprites = sprites
+        self.sprites = pygame.sprite.Group()
         self.gui_elements = []
-        self.background = background
+        self.background = ImageBox(self.window, 0, 0, w_width, w_height, (0, 0, 0), background)
+        self.w_width = w_width
+        self.w_height = w_height
+        self.events = pygame.event.get()
+        self.inputs = []
 
+    def draw_gui(self):
+        for gui_element in self.gui_elements:
+            gui_element.draw()
+
+    def generate_flatworld_file(self):
+        f = open("Level/flat.txt", "w")
+        for i in range(self.w_width):
+            f.write("BLOCK" + " " + str(i * 32) + " " + str(self.w_height - 32) + "\n")
+
+    def generate_flatworld(self):
+        for i in range(self.w_width):
+            block = Block(i * 32, self.w_height - 32)
+            self.sprites.add(block)
+            self.entities.append(block)
+
+    def load_world(self, fname):
+        f = open(fname, "r")
+        for line in f:
+            entity = line.split(" ")
+
+            if entity[0] == "BLOCK":
+                x = int(entity[1])
+                y = int(entity[2])
+                block = Block(x, y)
+                self.entities.append(block)
+                self.sprites.add(block)
+
+    def game_loop(self):
+        player = Player(self.w_width // 2, self.w_height // 2, self.entities)
+        self.entities.append(player)
+        self.sprites.add(player)
+        clock = pygame.time.Clock()
+        dt = 0
+        self.generate_flatworld()
+
+        while True:
+            for event in self.events:
+                for i in self.inputs:
+                    i.listen(event)
+
+            self.sprites.update(self.events, dt)
+
+            self.window.fill((0, 0, 0))
+            self.background.draw()
+            self.sprites.draw(self.window)
+            pygame.display.update()
+            dt = clock.tick(60)
